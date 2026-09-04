@@ -69,17 +69,24 @@ import com.example.storycardwriter.ui.theme.StoryCardWriterTheme
 import kotlinx.coroutines.launch
 
 class WriterActivity : ComponentActivity() {
+    companion object {
+        const val CreateNewStoryExtra = "create_new_story"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null && intent.getBooleanExtra(CreateNewStoryExtra, false)) {
+            StoryRepository.createNew(this, StoryData(title = "無題"))
+        }
         enableEdgeToEdge()
         setContent {
             StoryCardWriterTheme {
-                WriterScreen(onReturnHome = { returnToStartScreen() })
+                WriterScreen(onCreateNewStory = { createNewStory() })
             }
         }
     }
 
-    private fun returnToStartScreen() {
+    private fun createNewStory() {
         val intent = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         startActivity(intent)
@@ -89,7 +96,7 @@ class WriterActivity : ComponentActivity() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun WriterScreen(onReturnHome: () -> Unit) {
+private fun WriterScreen(onCreateNewStory: () -> Unit) {
     val context = LocalContext.current
     var story by remember { mutableStateOf(StoryRepository.load(context)) }
     var selectedType by remember { mutableStateOf(CardType.Hero) }
@@ -105,7 +112,7 @@ private fun WriterScreen(onReturnHome: () -> Unit) {
     var editingCardId by remember { mutableStateOf<String?>(null) }
     var insertAfterCardId by remember { mutableStateOf<String?>(null) }
     var lastCardVisibilityRequest by remember { mutableStateOf(0) }
-    var settingsExpanded by remember { mutableStateOf(true) }
+    var settingsExpanded by remember { mutableStateOf(false) }
     val cardListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val availableTypes = listOf(CardType.Hero, CardType.Partner, CardType.Narration, CardType.Action)
@@ -196,7 +203,7 @@ private fun WriterScreen(onReturnHome: () -> Unit) {
         if (hasUnsavedChanges) {
             showReturnConfirmDialog = true
         } else {
-            onReturnHome()
+            onCreateNewStory()
         }
     }
 
@@ -219,12 +226,12 @@ private fun WriterScreen(onReturnHome: () -> Unit) {
     if (showReturnConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showReturnConfirmDialog = false },
-            text = { Text("保存せずに初期画面へ戻りますか？") },
+            text = { Text("保存せずに新しいプロジェクトを作成しますか？") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showReturnConfirmDialog = false
-                        onReturnHome()
+                        onCreateNewStory()
                     }
                 ) {
                     Text("戻る")
@@ -377,7 +384,7 @@ private fun WriterScreen(onReturnHome: () -> Unit) {
                             OutlinedButton(
                                 onClick = { requestReturnHome() },
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("初期画面へ") }
+                            ) { Text("新規作成") }
                         }
                     }
                 }
@@ -554,7 +561,7 @@ private fun WriterBottomBar(
                 onClick = onReturnHome,
                 modifier = Modifier.fillMaxWidth().height(44.dp)
             ) {
-                Text("初期画面へ")
+                Text("新規作成")
             }
         }
     }
