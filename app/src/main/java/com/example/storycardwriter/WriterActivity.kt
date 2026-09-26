@@ -99,7 +99,7 @@ class WriterActivity : ComponentActivity() {
 private fun WriterScreen(onCreateNewStory: () -> Unit) {
     val context = LocalContext.current
     var story by remember { mutableStateOf(StoryRepository.load(context)) }
-    var selectedType by remember { mutableStateOf(CardType.Hero) }
+    var selectedType by remember { mutableStateOf(CardType.Idea) }
     var body by remember { mutableStateOf("") }
     var storyForExternalSave by remember { mutableStateOf<StoryData?>(null) }
     var hasUnsavedChanges by remember { mutableStateOf(false) }
@@ -115,7 +115,7 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
     var settingsExpanded by remember { mutableStateOf(false) }
     val cardListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    val availableTypes = listOf(CardType.Hero, CardType.Partner, CardType.Narration, CardType.Action)
+    val availableTypes = listOf(CardType.Idea, CardType.Target, CardType.Reference, CardType.Opinion)
 
     fun saveStory(updatedStory: StoryData) {
         story = updatedStory
@@ -171,7 +171,7 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
             runCatching { StoryRepository.importFromUri(context, it) }
                 .onSuccess { openedStory ->
                     story = openedStory
-                    selectedType = CardType.Hero
+                    selectedType = CardType.Idea
                     clearInputMode()
                     hasUnsavedChanges = false
                 }
@@ -403,7 +403,9 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
                         },
                         onEdit = {
                             insertAfterCardId = null
-                            selectedType = card.type.takeIf { it in availableTypes } ?: CardType.Narration
+                            // A Desktop-only/unknown type remains selected while its body is edited.
+                            // It changes only if the user explicitly taps one of the Quick 4 buttons.
+                            selectedType = card.type
                             body = card.body
                             editingCardId = card.id
                         },
@@ -607,26 +609,22 @@ private fun StoryCardView(
     onDelete: () -> Unit
 ) {
     val alignment = when (card.type) {
-        CardType.Hero -> Alignment.CenterStart
-        CardType.Partner,
-        CardType.Partner2 -> Alignment.CenterEnd
-        CardType.Narration,
-        CardType.Action -> Alignment.Center
+        CardType.Subject, CardType.LegacyHero -> Alignment.CenterStart
+        CardType.Idea, CardType.LegacyPartner2 -> Alignment.CenterEnd
+        else -> Alignment.Center
     }
     val label = when (card.type) {
         else -> mobileCardTypeName(card.type)
     }
     val colors = cardColorsFor(card.type)
     val cardModifier = when (card.type) {
-        CardType.Hero -> Modifier
+        CardType.Subject, CardType.LegacyHero -> Modifier
             .fillMaxWidth(0.84f)
             .padding(end = 36.dp)
-        CardType.Partner,
-        CardType.Partner2 -> Modifier
+        CardType.Idea, CardType.LegacyPartner2 -> Modifier
             .fillMaxWidth(0.84f)
             .padding(start = 36.dp)
-        CardType.Narration,
-        CardType.Action -> Modifier.fillMaxWidth(0.68f)
+        else -> Modifier.fillMaxWidth(0.68f)
     }
 
     Box(
@@ -684,10 +682,15 @@ private fun StoryCardView(
 }
 
 private fun mobileCardTypeName(type: CardType): String = when (type) {
-    CardType.Hero -> "アイデア"
-    CardType.Partner, CardType.Partner2 -> "メモ"
-    CardType.Narration -> "会話"
-    CardType.Action -> "描写"
+    CardType.Subject -> "主題"
+    CardType.Idea -> "アイデア"
+    CardType.Target -> "対象"
+    CardType.Reference -> "参考"
+    CardType.Opinion -> "意見"
+    CardType.Decision -> "決定"
+    CardType.LegacyHero -> "Hero"
+    CardType.LegacyPartner2 -> "Partner2"
+    CardType.Unknown -> "不明"
 }
 
 @Composable
@@ -728,35 +731,35 @@ private data class StoryCardColors(
 
 private fun cardColorsFor(type: CardType): StoryCardColors {
     return when (type) {
-        CardType.Hero -> StoryCardColors(
+        CardType.Subject, CardType.LegacyHero -> StoryCardColors(
             border = Color(0xFF6BA3E8),
             background = Color(0xFFF3F8FF),
             selectedBackground = Color(0xFFE4F0FF),
             labelBackground = Color(0xFFE4F0FF),
             label = Color(0xFF195CA8)
         )
-        CardType.Partner -> StoryCardColors(
+        CardType.Idea -> StoryCardColors(
             border = Color(0xFF74BE8A),
             background = Color(0xFFF2FBF4),
             selectedBackground = Color(0xFFE3F6E8),
             labelBackground = Color(0xFFE3F6E8),
             label = Color(0xFF26733A)
         )
-        CardType.Partner2 -> StoryCardColors(
+        CardType.Opinion, CardType.LegacyPartner2 -> StoryCardColors(
             border = Color(0xFFB17BD4),
             background = Color(0xFFFBF5FF),
             selectedBackground = Color(0xFFF0E2FA),
             labelBackground = Color(0xFFF0E2FA),
             label = Color(0xFF713B93)
         )
-        CardType.Narration -> StoryCardColors(
+        CardType.Target, CardType.Unknown -> StoryCardColors(
             border = Color(0xFFB7BCC4),
             background = Color(0xFFF7F7F8),
             selectedBackground = Color(0xFFEDEFF2),
             labelBackground = Color(0xFFEDEFF2),
             label = Color(0xFF565C66)
         )
-        CardType.Action -> StoryCardColors(
+        CardType.Reference, CardType.Decision -> StoryCardColors(
             border = Color(0xFFE4A25E),
             background = Color(0xFFFFF7EE),
             selectedBackground = Color(0xFFFFEAD2),

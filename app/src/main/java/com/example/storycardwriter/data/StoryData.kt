@@ -3,11 +3,15 @@ package com.example.storycardwriter.data
 import java.util.UUID
 
 enum class CardType(val displayName: String) {
-    Hero("主人公"),
-    Partner("相手役1"),
-    Partner2("相手役2"),
-    Narration("ナレーション"),
-    Action("アクション")
+    Subject("主題"),
+    Idea("アイデア"),
+    Target("対象"),
+    Reference("参考"),
+    Opinion("意見"),
+    Decision("決定"),
+    LegacyHero("旧 Hero"),
+    LegacyPartner2("旧 Partner2"),
+    Unknown("不明")
 }
 
 enum class StoryTemplate(val displayName: String) {
@@ -17,7 +21,11 @@ enum class StoryTemplate(val displayName: String) {
 data class StoryCard(
     val id: String = UUID.randomUUID().toString(),
     val type: CardType,
-    val body: String
+    val body: String,
+    /** Original JSON is overlaid on save so unrecognized fields and spellings survive. */
+    val sourceJson: String? = null,
+    /** Null means preserve sourceJson.type; non-null is a deliberate/new classification. */
+    val saveType: String? = null
 )
 
 data class CharacterNote(
@@ -47,7 +55,11 @@ data class StoryData(
     val partner1Name: String = "人物B",
     val partner2Name: String = "友人",
     val cards: List<StoryCard> = emptyList(),
-    val characters: List<CharacterData> = emptyList()
+    val characters: List<CharacterData> = emptyList(),
+    /** Original story/root objects used for lossless pass-through of fields Android does not know. */
+    val sourceStoryJson: String? = null,
+    val sourceRootJson: String? = null,
+    val sourceWasWrapped: Boolean = false
 ) {
     val heroName: String get() = protagonistName
     val partnerName: String get() = partner1Name

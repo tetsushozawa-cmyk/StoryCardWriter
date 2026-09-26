@@ -12,13 +12,13 @@ class StoryRepositoryInstrumentedTest {
             StoryData(
                 title = "二人作品",
                 participantCount = 2,
-                cards = listOf(StoryCard(type = CardType.Action, body = "歩く"))
+                cards = listOf(StoryCard(type = CardType.Reference, body = "歩く", saveType = "アクション"))
             ),
             StoryData(
                 title = "三人作品",
                 participantCount = 3,
                 partner2Name = "友人",
-                cards = listOf(StoryCard(type = CardType.Partner2, body = "こんにちは"))
+                cards = listOf(StoryCard(type = CardType.LegacyPartner2, body = "こんにちは", saveType = "Partner2"))
             )
         ).forEach { expected ->
             StoryRepository.createNew(context, expected)
@@ -45,7 +45,7 @@ class StoryRepositoryInstrumentedTest {
         assertEquals(2, story.participantCount)
         assertEquals("太郎", story.protagonistName)
         assertEquals("花子", story.partner1Name)
-        assertEquals(CardType.Partner, story.cards.single().type)
+        assertEquals(CardType.Idea, story.cards.single().type)
         assertEquals(emptyList<CharacterData>(), story.characters)
     }
 

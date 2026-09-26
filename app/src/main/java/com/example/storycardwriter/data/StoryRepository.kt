@@ -179,18 +179,24 @@ object StoryRepository {
     internal fun readStoryJson(rawJson: String): Result<StoryData> {
         return runCatching {
             val json = JSONObject(rawJson)
-            val storyJson = json.optJSONObject("story") ?: json
+            val wrappedStory = json.optJSONObject("story")
+            val storyJson = wrappedStory ?: json
             val cardsJson = storyJson.optJSONArray("cards") ?: JSONArray()
             val cards = buildList {
                 for (index in 0 until cardsJson.length()) {
                     val cardJson = cardsJson.optJSONObject(index) ?: continue
-                    val type = parseCardType(cardJson.optString("type")) ?: continue
+                    val rawType = cardJson.optString("type")
 
                     add(
                         StoryCard(
                             id = cardJson.optString("id", UUID.randomUUID().toString()),
-                            type = type,
-                            body = cardJson.optString("body")
+                            type = parseCardType(rawType),
+                            body = when {
+                                cardJson.has("text") -> cardJson.optString("text")
+                                else -> cardJson.optString("body")
+                            },
+                            sourceJson = cardJson.toString(),
+                            saveType = null
                         )
                     )
                 }
@@ -230,14 +236,26 @@ object StoryRepository {
                 partner1Name = storyJson.firstNonBlank("partner1Name", "partnerName", fallback = "人物B"),
                 partner2Name = storyJson.firstNonBlank("partner2Name", fallback = "友人"),
                 cards = cards,
-                characters = characters
+                characters = characters,
+                sourceStoryJson = storyJson.toString(),
+                sourceRootJson = json.toString(),
+                sourceWasWrapped = wrappedStory != null
             )
         }
     }
 
-    private fun parseCardType(value: String): CardType? = when (value) {
-        "Partner1" -> CardType.Partner
-        else -> runCatching { CardType.valueOf(value) }.getOrNull()
+    internal fun externalJson(story: StoryData): JSONObject = story.toExternalScwJson()
+
+    private fun parseCardType(value: String): CardType = when (value) {
+        "主人公", "Protagonist" -> CardType.Subject
+        "相手", "Partner", "Partner1" -> CardType.Idea
+        "ナレーション", "Narration" -> CardType.Target
+        "アクション", "Action" -> CardType.Reference
+        "心情", "Emotion" -> CardType.Opinion
+        "効果音", "SoundEffect" -> CardType.Decision
+        "Hero" -> CardType.LegacyHero
+        "Partner2" -> CardType.LegacyPartner2
+        else -> CardType.Unknown
     }
 
     private fun JSONObject.firstNonBlank(vararg keys: String, fallback: String): String {
@@ -306,12 +324,16 @@ object StoryRepository {
     private fun StoryData.cardsJson(): JSONArray {
         val cardsJson = JSONArray()
         cards.forEach { card ->
-            cardsJson.put(
-                JSONObject()
-                    .put("id", card.id)
-                    .put("type", card.type.name)
-                    .put("body", card.body)
-            )
+            val json = card.sourceJson?.let(::JSONObject) ?: JSONObject()
+            json.put("id", card.id)
+            if (card.saveType != null || !json.has("type")) {
+                json.put("type", card.saveType ?: card.type.desktopSaveValue)
+            }
+            // Desktop's canonical field is text. Retain a pre-existing body alias untouched;
+            // when editing, both fields receive the same current content.
+            json.put("text", card.body)
+            if (json.has("body")) json.put("body", card.body)
+            cardsJson.put(json)
         }
         return cardsJson
     }
@@ -331,7 +353,8 @@ object StoryRepository {
     }
 
     internal fun StoryData.toScwJson(): JSONObject {
-        val storyJson = JSONObject()
+        val storyJson = sourceStoryJson?.let(::JSONObject) ?: JSONObject()
+        storyJson
             .put("title", title)
             .put("template", template.name)
             .put("participantCount", participantCount)
@@ -344,14 +367,28 @@ object StoryRepository {
             .put("cards", cardsJson())
             .put("characters", charactersJson())
 
-        return JSONObject()
+        val root = if (sourceWasWrapped) sourceRootJson?.let(::JSONObject) ?: JSONObject() else JSONObject()
+        return root
             .put("formatVersion", FormatVersion)
             .put("fileType", "StoryCardWriter")
             .put("story", storyJson)
     }
 
-    private fun StoryData.toExternalScwJson(): JSONObject {
-        return JSONObject()
+    internal fun StoryData.toExternalScwJson(): JSONObject {
+        // External .scw is always Desktop's root-level shape. For a root-level source,
+        // begin with the original object so unknown root fields pass through.
+        val external = if (!sourceWasWrapped) {
+            sourceRootJson?.let(::JSONObject) ?: JSONObject()
+        } else {
+            val root = sourceRootJson?.let(::JSONObject) ?: JSONObject()
+            root.remove("formatVersion")
+            root.remove("fileType")
+            root.remove("story")
+            val originalStory = sourceStoryJson?.let(::JSONObject) ?: JSONObject()
+            originalStory.keys().forEach { key -> root.put(key, originalStory.get(key)) }
+            root
+        }
+        return external
             .put("title", title)
             .put("templateName", template.name)
             .put("participantCount", participantCount)
