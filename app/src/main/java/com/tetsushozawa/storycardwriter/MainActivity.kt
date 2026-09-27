@@ -1,4 +1,4 @@
-package com.example.storycardwriter
+package com.tetsushozawa.storycardwriter
 
 import android.content.Intent
 import android.os.Bundle

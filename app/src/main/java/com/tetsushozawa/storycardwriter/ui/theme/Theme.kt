@@ -1,4 +1,4 @@
-package com.example.storycardwriter.ui.theme
+package com.tetsushozawa.storycardwriter.ui.theme
 
 import android.app.Activity
 import android.os.Build

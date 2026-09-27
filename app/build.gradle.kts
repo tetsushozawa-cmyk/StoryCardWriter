@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.storycardwriter"
+    namespace = "com.tetsushozawa.storycardwriter"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.storycardwriter"
+        applicationId = "com.tetsushozawa.storycardwriter"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

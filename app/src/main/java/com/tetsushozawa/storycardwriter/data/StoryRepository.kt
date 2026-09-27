@@ -1,4 +1,4 @@
-package com.example.storycardwriter.data
+package com.tetsushozawa.storycardwriter.data
 
 import android.content.Context
 import android.net.Uri

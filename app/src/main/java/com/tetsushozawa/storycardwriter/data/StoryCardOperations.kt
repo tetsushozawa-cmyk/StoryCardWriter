@@ -1,4 +1,4 @@
-package com.example.storycardwriter.data
+package com.tetsushozawa.storycardwriter.data
 
 internal fun List<StoryCard>.insertCardAfter(targetId: String, newCard: StoryCard): List<StoryCard> {
     val targetIndex = indexOfFirst { it.id == targetId }

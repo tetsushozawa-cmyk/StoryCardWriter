@@ -1,4 +1,4 @@
-package com.example.storycardwriter.ui.theme
+package com.tetsushozawa.storycardwriter.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

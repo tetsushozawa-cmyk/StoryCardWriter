@@ -1,4 +1,4 @@
-package com.example.storycardwriter
+package com.tetsushozawa.storycardwriter
 
 import android.content.Intent
 import android.os.Bundle
@@ -60,12 +60,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.storycardwriter.data.CardType
-import com.example.storycardwriter.data.StoryCard
-import com.example.storycardwriter.data.StoryData
-import com.example.storycardwriter.data.StoryRepository
-import com.example.storycardwriter.data.commitCardInput
-import com.example.storycardwriter.ui.theme.StoryCardWriterTheme
+import com.tetsushozawa.storycardwriter.data.CardType
+import com.tetsushozawa.storycardwriter.data.StoryCard
+import com.tetsushozawa.storycardwriter.data.StoryData
+import com.tetsushozawa.storycardwriter.data.StoryRepository
+import com.tetsushozawa.storycardwriter.data.commitCardInput
+import com.tetsushozawa.storycardwriter.ui.theme.StoryCardWriterTheme
 import kotlinx.coroutines.launch
 
 class WriterActivity : ComponentActivity() {
@@ -718,7 +718,7 @@ private fun suggestScwFileName(title: String): String {
         .replace(Regex("[\\/:*?\"<>|\r\n]+"), "_")
         .trim(' ', '.')
         .ifBlank { "untitled" }
-    return com.example.storycardwriter.data.ensureScwFileName(baseName)
+    return com.tetsushozawa.storycardwriter.data.ensureScwFileName(baseName)
 }
 
 private data class StoryCardColors(

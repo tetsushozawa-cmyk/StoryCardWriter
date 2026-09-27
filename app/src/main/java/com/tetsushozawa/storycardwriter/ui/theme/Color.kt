@@ -1,4 +1,4 @@
-package com.example.storycardwriter.ui.theme
+package com.tetsushozawa.storycardwriter.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

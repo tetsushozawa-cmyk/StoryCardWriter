@@ -1,4 +1,4 @@
-package com.example.storycardwriter.data
+package com.tetsushozawa.storycardwriter.data
 
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals

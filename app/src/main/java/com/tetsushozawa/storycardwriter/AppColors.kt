@@ -1,4 +1,4 @@
-package com.example.storycardwriter
+package com.tetsushozawa.storycardwriter
 
 import androidx.compose.ui.graphics.Color
 

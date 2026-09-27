@@ -1,4 +1,4 @@
-package com.example.storycardwriter.data
+package com.tetsushozawa.storycardwriter.data
 
 import java.util.UUID
 

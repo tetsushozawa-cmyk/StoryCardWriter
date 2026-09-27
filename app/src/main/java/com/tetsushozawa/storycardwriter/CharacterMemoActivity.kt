@@ -1,4 +1,4 @@
-package com.example.storycardwriter
+package com.tetsushozawa.storycardwriter
 
 import android.os.Bundle
 import android.widget.Toast
@@ -48,11 +48,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.storycardwriter.data.CharacterData
-import com.example.storycardwriter.data.CharacterNote
-import com.example.storycardwriter.data.CharacterSection
-import com.example.storycardwriter.data.StoryRepository
-import com.example.storycardwriter.ui.theme.StoryCardWriterTheme
+import com.tetsushozawa.storycardwriter.data.CharacterData
+import com.tetsushozawa.storycardwriter.data.CharacterNote
+import com.tetsushozawa.storycardwriter.data.CharacterSection
+import com.tetsushozawa.storycardwriter.data.StoryRepository
+import com.tetsushozawa.storycardwriter.ui.theme.StoryCardWriterTheme
 import java.io.ByteArrayOutputStream
 
 class CharacterMemoActivity : ComponentActivity() {

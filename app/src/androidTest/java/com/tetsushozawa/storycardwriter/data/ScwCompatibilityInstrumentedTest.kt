@@ -1,4 +1,4 @@
-package com.example.storycardwriter.data
+package com.tetsushozawa.storycardwriter.data
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
