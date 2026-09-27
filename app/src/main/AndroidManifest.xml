@@ -33,6 +33,46 @@
             android:theme="@style/Theme.StoryCardWriter"
             android:windowSoftInputMode="adjustResize" />
         <activity
+            android:name=".OpenScwActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.StoryCardWriter">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+
+                <data
+                    android:mimeType="application/vnd.storycardwriter+json"
+                    android:scheme="content" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+
+                <data
+                    android:host="*"
+                    android:mimeType="application/json"
+                    android:pathPattern=".*\\.scw"
+                    android:scheme="content" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+
+                <data
+                    android:host="*"
+                    android:mimeType="application/octet-stream"
+                    android:pathPattern=".*\\.scw"
+                    android:scheme="content" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
