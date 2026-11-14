@@ -2,9 +2,23 @@ package com.tetsushozawa.storycardwriter.data
 
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StoryRepositoryInstrumentedTest {
+    @Test
+    fun externalScw_canBeOverwrittenAndReadAgainWithoutChangingFormat() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val uri = StoryRepository.createShareUri(context, StoryData(title = "上書き前"))
+
+        StoryRepository.overwriteUriSafely(context, uri, StoryData(title = "上書き後"))
+
+        val rawJson = context.contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() }
+        val reloaded = StoryRepository.readStoryJson(rawJson).getOrThrow()
+        assertEquals("上書き後", reloaded.title)
+        assertTrue(!org.json.JSONObject(rawJson).has("story"))
+    }
+
     @Test
     fun saveAndReload_twoAndThreePersonStories() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()

@@ -1,6 +1,7 @@
 package com.tetsushozawa.storycardwriter
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -53,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.onFocusChanged
@@ -60,17 +62,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
 import com.tetsushozawa.storycardwriter.data.CardType
 import com.tetsushozawa.storycardwriter.data.StoryCard
 import com.tetsushozawa.storycardwriter.data.StoryData
 import com.tetsushozawa.storycardwriter.data.StoryRepository
 import com.tetsushozawa.storycardwriter.data.commitCardInput
+import com.tetsushozawa.storycardwriter.data.requestedScwFileName
+import com.tetsushozawa.storycardwriter.data.timestampedScwFileName
 import com.tetsushozawa.storycardwriter.ui.theme.StoryCardWriterTheme
 import kotlinx.coroutines.launch
 
 class WriterActivity : ComponentActivity() {
     companion object {
         const val CreateNewStoryExtra = "create_new_story"
+        const val ExternalStoryUriExtra = "external_story_uri"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,7 +87,10 @@ class WriterActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             StoryCardWriterTheme {
-                WriterScreen(onCreateNewStory = { createNewStory() })
+                WriterScreen(
+                    initialExternalUri = intent.getStringExtra(ExternalStoryUriExtra)?.let(Uri::parse),
+                    onCreateNewStory = { createNewStory() }
+                )
             }
         }
     }
@@ -96,12 +105,25 @@ class WriterActivity : ComponentActivity() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun WriterScreen(onCreateNewStory: () -> Unit) {
+private fun WriterScreen(initialExternalUri: Uri?, onCreateNewStory: () -> Unit) {
     val context = LocalContext.current
+    val restoredExternalUri = remember(initialExternalUri) {
+        initialExternalUri ?: StoryRepository.activeExternalUri(context)
+    }
     var story by remember { mutableStateOf(StoryRepository.load(context)) }
     var selectedType by remember { mutableStateOf(CardType.Idea) }
     var body by remember { mutableStateOf("") }
     var storyForExternalSave by remember { mutableStateOf<StoryData?>(null) }
+    var currentExternalUri by remember { mutableStateOf(restoredExternalUri) }
+    var currentExternalFileName by remember {
+        mutableStateOf(
+            restoredExternalUri?.let { uri ->
+                runCatching { StoryRepository.displayName(context, uri) }.getOrNull()
+            }
+        )
+    }
+    var showSaveAsDialog by remember { mutableStateOf(false) }
+    var saveAsName by remember { mutableStateOf("") }
     var hasUnsavedChanges by remember { mutableStateOf(false) }
     var showReturnConfirmDialog by remember { mutableStateOf(false) }
     var showStorySettingsDialog by remember { mutableStateOf(false) }
@@ -151,13 +173,26 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
         if (uri != null && storyToSave != null) {
             runCatching {
                 val scwUri = StoryRepository.ensureScwExtension(context, uri)
-                StoryRepository.exportToUri(context, scwUri, storyToSave)
+                StoryRepository.exportNewToUri(context, scwUri, storyToSave)
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        scwUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                }
+                scwUri
             }
-                .onSuccess {
+                .onSuccess { savedUri ->
+                    currentExternalUri = savedUri
+                    currentExternalFileName = runCatching {
+                        StoryRepository.displayName(context, savedUri)
+                    }.getOrNull()
+                    StoryRepository.setActiveExternalUri(context, savedUri)
                     hasUnsavedChanges = false
                     Toast.makeText(context, ".scwファイルを保存しました", Toast.LENGTH_SHORT).show()
                 }
                 .onFailure {
+                    StoryRepository.deleteDocumentIfPossible(context, uri)
                     Toast.makeText(context, ".scwファイルを保存できませんでした", Toast.LENGTH_SHORT).show()
                 }
         }
@@ -170,7 +205,18 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
         uri?.let {
             runCatching { StoryRepository.importFromUri(context, it) }
                 .onSuccess { openedStory ->
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(
+                            it,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                    }
                     story = openedStory
+                    currentExternalUri = it
+                    currentExternalFileName = runCatching {
+                        StoryRepository.displayName(context, it)
+                    }.getOrNull()
+                    StoryRepository.setActiveExternalUri(context, it)
                     selectedType = CardType.Idea
                     clearInputMode()
                     hasUnsavedChanges = false
@@ -208,6 +254,58 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
     }
 
     BackHandler { requestReturnHome() }
+
+    if (showSaveAsDialog) {
+        val normalizedName = requestedScwFileName(saveAsName)
+        AlertDialog(
+            onDismissRequest = {
+                showSaveAsDialog = false
+                storyForExternalSave = null
+            },
+            title = { Text("名前を付けて保存") },
+            text = {
+                OutlinedTextField(
+                    value = saveAsName,
+                    onValueChange = { saveAsName = it },
+                    label = { Text("ファイル名") },
+                    supportingText = { Text("拡張子 .scw は自動的に付きます") },
+                    singleLine = true,
+                    modifier = Modifier.testTag("save-name-input")
+                )
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (normalizedName == null) {
+                        TextButton(
+                            modifier = Modifier.testTag("save-with-timestamp"),
+                            onClick = {
+                                showSaveAsDialog = false
+                                createStoryDocumentLauncher.launch(timestampedScwFileName())
+                            }
+                        ) { Text("日時を付けて保存") }
+                    }
+                    TextButton(
+                        enabled = normalizedName != null,
+                        modifier = Modifier.testTag("save-name-confirm"),
+                        onClick = {
+                            val fileName = normalizedName ?: return@TextButton
+                            showSaveAsDialog = false
+                            createStoryDocumentLauncher.launch(fileName)
+                        }
+                    ) { Text("保存") }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    modifier = Modifier.testTag("save-name-cancel"),
+                    onClick = {
+                        showSaveAsDialog = false
+                        storyForExternalSave = null
+                    }
+                ) { Text("キャンセル") }
+            }
+        )
+    }
 
     LaunchedEffect(story.cards.size) {
         if (story.cards.isNotEmpty()) {
@@ -339,6 +437,14 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
                         }
                     }
                 }
+                item {
+                    Text(
+                        text = "ファイル名：${currentExternalFileName ?: "未保存"}",
+                        color = AppMutedInk,
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 if (settingsExpanded) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -429,8 +535,35 @@ private fun WriterScreen(onCreateNewStory: () -> Unit) {
                         onSave = {
                             val storyToSave = commitPendingInput()
                             StoryRepository.save(context, storyToSave)
+                            val uri = currentExternalUri
+                            if (uri == null) {
+                                storyForExternalSave = storyToSave
+                                saveAsName = ""
+                                showSaveAsDialog = true
+                            } else {
+                                runCatching { StoryRepository.overwriteUriSafely(context, uri, storyToSave) }
+                                    .onSuccess {
+                                        hasUnsavedChanges = false
+                                        Toast.makeText(context, ".scwファイルを上書き保存しました", Toast.LENGTH_SHORT).show()
+                                    }
+                                    .onFailure {
+                                        storyForExternalSave = storyToSave
+                                        saveAsName = ""
+                                        showSaveAsDialog = true
+                                        Toast.makeText(
+                                            context,
+                                            "このファイルは上書きできません。名前を付けて保存してください",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                            }
+                        },
+                        onSaveAs = {
+                            val storyToSave = commitPendingInput()
+                            StoryRepository.save(context, storyToSave)
                             storyForExternalSave = storyToSave
-                            createStoryDocumentLauncher.launch(suggestScwFileName(storyToSave.title))
+                            saveAsName = ""
+                            showSaveAsDialog = true
                         },
                         onShare = { shareStory() },
                         onOpen = { openStoryLauncher.launch(arrayOf("application/json", "text/*", "application/octet-stream", "*/*")) },
@@ -457,6 +590,7 @@ private fun WriterBottomBar(
     isInserting: Boolean,
     onCancel: () -> Unit,
     onSave: () -> Unit,
+    onSaveAs: () -> Unit,
     onShare: () -> Unit,
     onOpen: () -> Unit,
     onReturnHome: () -> Unit,
@@ -533,6 +667,20 @@ private fun WriterBottomBar(
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onSave,
+                    modifier = Modifier.weight(1f).height(44.dp).testTag("save-current-button")
+                ) {
+                    Text("保存", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+                OutlinedButton(onClick = onSaveAs, modifier = Modifier.weight(1f).height(44.dp)) {
+                    Text("名前を付けて保存", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -544,13 +692,14 @@ private fun WriterBottomBar(
                         Text("キャンセル", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f).height(44.dp)) {
-                    Text("保存", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
                 OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f).height(44.dp)) {
                     Text("共有", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
-                OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f).height(44.dp)) {
+                OutlinedButton(
+                    onClick = onOpen,
+                    modifier = Modifier.weight(1f).height(44.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Black)
+                ) {
                     Text(
                         "保存ファイルを開く",
                         fontSize = 12.sp,
@@ -666,7 +815,12 @@ private fun StoryCardView(
                         onClick = onInsertAfter
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    SmallCardButton(text = "編集", onClick = onEdit)
+                    SmallCardButton(
+                        text = "編集",
+                        fontSize = 13.sp,
+                        contentColor = Color.Black,
+                        onClick = onEdit
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
                     SmallCardButton(text = "削除", onClick = onDelete)
                 }
@@ -697,6 +851,8 @@ private fun mobileCardTypeName(type: CardType): String = when (type) {
 private fun SmallCardButton(
     text: String,
     enabled: Boolean = true,
+    fontSize: TextUnit = 11.sp,
+    contentColor: Color? = null,
     onClick: () -> Unit
 ) {
     OutlinedButton(
@@ -706,19 +862,13 @@ private fun SmallCardButton(
             .height(30.dp)
             .defaultMinSize(minWidth = 48.dp, minHeight = 30.dp),
         shape = RoundedCornerShape(8.dp),
+        colors = contentColor?.let {
+            ButtonDefaults.outlinedButtonColors(contentColor = it)
+        } ?: ButtonDefaults.outlinedButtonColors(),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
     ) {
-        Text(text, fontSize = 11.sp)
+        Text(text, fontSize = fontSize)
     }
-}
-
-private fun suggestScwFileName(title: String): String {
-    val baseName = title
-        .ifBlank { "untitled" }
-        .replace(Regex("[\\/:*?\"<>|\r\n]+"), "_")
-        .trim(' ', '.')
-        .ifBlank { "untitled" }
-    return com.tetsushozawa.storycardwriter.data.ensureScwFileName(baseName)
 }
 
 private data class StoryCardColors(

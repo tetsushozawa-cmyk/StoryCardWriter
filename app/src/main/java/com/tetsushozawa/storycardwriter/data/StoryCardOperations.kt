@@ -1,5 +1,10 @@
 package com.tetsushozawa.storycardwriter.data
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
 internal fun List<StoryCard>.insertCardAfter(targetId: String, newCard: StoryCard): List<StoryCard> {
     val targetIndex = indexOfFirst { it.id == targetId }
     if (targetIndex == -1) return this + newCard
@@ -36,6 +41,36 @@ internal fun List<StoryCard>.commitCardInput(
         insertAfterCardId != null -> insertCardAfter(insertAfterCardId, newCard)
         else -> this + newCard
     }
+}
+
+internal fun requestedScwFileName(input: String): String? {
+    val baseName = input
+        .trim()
+        .replace(Regex("(?i)(\\.${StoryRepository.FileExtension})+$"), "")
+        .replace(Regex("[\\\\/:*?\"<>|\\r\\n]+"), "_")
+        .trim(' ', '.')
+        .takeIf { it.isNotEmpty() }
+        ?: return null
+    return "$baseName.${StoryRepository.FileExtension}"
+}
+
+internal fun correctedScwDocumentName(displayName: String): String {
+    if (displayName.endsWith(".${StoryRepository.FileExtension}", ignoreCase = true)) {
+        return displayName
+    }
+    val providerDuplicate = Regex("(?i)^(.*)\\.scw \\((\\d+)\\)$").matchEntire(displayName)
+    return providerDuplicate?.let { match ->
+        "${match.groupValues[1]} (${match.groupValues[2]}).${StoryRepository.FileExtension}"
+    } ?: ensureScwFileName(displayName)
+}
+
+internal fun timestampedScwFileName(
+    timestampMillis: Long = System.currentTimeMillis(),
+    timeZone: TimeZone = TimeZone.getDefault()
+): String {
+    return SimpleDateFormat("'SCW_'yyyyMMdd_HHmmss'.scw'", Locale.US).apply {
+        this.timeZone = timeZone
+    }.format(Date(timestampMillis))
 }
 
 internal val CardType.desktopSaveValue: String

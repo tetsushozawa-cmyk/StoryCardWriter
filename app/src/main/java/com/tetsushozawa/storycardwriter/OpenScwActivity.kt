@@ -20,7 +20,12 @@ class OpenScwActivity : ComponentActivity() {
 
         importResult
             .onSuccess {
-                startActivity(Intent(this, WriterActivity::class.java))
+                startActivity(
+                    Intent(this, WriterActivity::class.java)
+                        .putExtra(WriterActivity.ExternalStoryUriExtra, incomingIntent.data.toString())
+                        .addFlags(incomingIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        .addFlags(incomingIntent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                )
                 finish()
             }
             .onFailure {

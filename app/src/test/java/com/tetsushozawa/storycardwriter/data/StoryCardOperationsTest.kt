@@ -2,6 +2,8 @@ package com.tetsushozawa.storycardwriter.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.Instant
+import java.util.TimeZone
 
 class StoryCardOperationsTest {
     @Test
@@ -9,6 +11,38 @@ class StoryCardOperationsTest {
         assertEquals("filename.scw", ensureScwFileName("filename"))
         assertEquals("filename.scw", ensureScwFileName("filename.scw"))
         assertEquals("filename.scw", ensureScwFileName("filename.SCW"))
+    }
+
+    @Test
+    fun requestedScwFileName_trimsPreservesJapaneseAndAddsExtensionOnce() {
+        assertEquals("秋の夕暮れ.scw", requestedScwFileName("  秋の夕暮れ  "))
+        assertEquals("秋の夕暮れ.scw", requestedScwFileName("秋の夕暮れ.scw"))
+        assertEquals("秋の夕暮れ.scw", requestedScwFileName("秋の夕暮れ.SCW"))
+        assertEquals("秋の夕暮れ.scw", requestedScwFileName("秋の夕暮れ.scw.scw"))
+        assertEquals("参考.scw", requestedScwFileName("参考"))
+    }
+
+    @Test
+    fun requestedScwFileName_rejectsBlankAndSanitizesPathCharacters() {
+        assertEquals(null, requestedScwFileName("  \n "))
+        assertEquals("秋_夕.scw", requestedScwFileName("秋/夕"))
+    }
+
+    @Test
+    fun correctedScwDocumentName_movesProviderDuplicateNumberBeforeExtension() {
+        assertEquals("秋.scw", correctedScwDocumentName("秋.scw"))
+        assertEquals("秋 (1).scw", correctedScwDocumentName("秋.scw (1)"))
+        assertEquals("秋.scw", correctedScwDocumentName("秋"))
+    }
+
+    @Test
+    fun timestampedScwFileName_usesProvidedLocalTimeZone() {
+        val timestamp = Instant.parse("2026-11-14T11:45:00Z").toEpochMilli()
+
+        assertEquals(
+            "SCW_20261114_204500.scw",
+            timestampedScwFileName(timestamp, TimeZone.getTimeZone("Asia/Tokyo"))
+        )
     }
 
     @Test

@@ -19,6 +19,8 @@ object StoryRepository {
     private const val StateFileName = "state.json"
     private const val DefaultStoryFileName = "untitled.scw"
     private const val FormatVersion = 2
+    private const val PreferencesName = "story_repository"
+    private const val ActiveExternalUriKey = "active_external_uri"
 
     fun load(context: Context): StoryData {
         ensureStorage(context)
@@ -44,6 +46,7 @@ object StoryRepository {
         val file = uniqueStoryFile(context, emptyStory.title.ifBlank { "untitled" })
         saveToFile(file, emptyStory)
         setActiveFileName(context, file.name)
+        setActiveExternalUri(context, null)
         return emptyStory
     }
 
@@ -77,29 +80,71 @@ object StoryRepository {
     }
 
     fun exportToUri(context: Context, uri: Uri, story: StoryData) {
-        context.contentResolver.openOutputStream(uri, "wt")?.use { outputStream ->
-            outputStream.bufferedWriter().use { writer ->
-                writer.write(story.toExternalScwJson().toString(2))
-            }
-        } ?: error("Cannot write selected file")
+        writeStoryToUri(context, uri, story)
     }
 
-    fun ensureScwExtension(context: Context, uri: Uri): Uri {
-        val displayName = context.contentResolver.query(
+    fun exportNewToUri(context: Context, uri: Uri, story: StoryData) {
+        try {
+            writeStoryToUri(context, uri, story)
+        } catch (error: Throwable) {
+            deleteDocumentIfPossible(context, uri)
+            throw error
+        }
+    }
+
+    fun deleteDocumentIfPossible(context: Context, uri: Uri) {
+        runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+    }
+
+    fun overwriteUriSafely(context: Context, uri: Uri, story: StoryData) {
+        val original = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: error("Cannot read selected file before overwrite")
+        try {
+            writeStoryToUri(context, uri, story)
+        } catch (error: Throwable) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(original) }
+                    ?: error("Cannot restore selected file")
+            }
+            throw error
+        }
+    }
+
+    fun displayName(context: Context, uri: Uri): String {
+        return context.contentResolver.query(
             uri,
             arrayOf(OpenableColumns.DISPLAY_NAME),
             null,
             null,
             null
         )?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else null
+            if (cursor.moveToFirst()) cursor.getString(0).orEmpty() else ""
         }.orEmpty()
+    }
+
+    fun activeExternalUri(context: Context): Uri? {
+        val value = context.getSharedPreferences(PreferencesName, Context.MODE_PRIVATE)
+            .getString(ActiveExternalUriKey, null)
+        return value?.let(Uri::parse)
+    }
+
+    fun setActiveExternalUri(context: Context, uri: Uri?) {
+        context.getSharedPreferences(PreferencesName, Context.MODE_PRIVATE)
+            .edit()
+            .apply {
+                if (uri == null) remove(ActiveExternalUriKey) else putString(ActiveExternalUriKey, uri.toString())
+            }
+            .apply()
+    }
+
+    fun ensureScwExtension(context: Context, uri: Uri): Uri {
+        val displayName = displayName(context, uri)
         if (displayName.endsWith(".$FileExtension", ignoreCase = true)) return uri
 
         val renamedUri = DocumentsContract.renameDocument(
             context.contentResolver,
             uri,
-            ensureScwFileName(displayName)
+            correctedScwDocumentName(displayName)
         )
         return requireNotNull(renamedUri) { "Cannot add .$FileExtension extension" }
     }
@@ -319,6 +364,14 @@ object StoryRepository {
     private fun saveToFile(file: File, story: StoryData) {
         file.parentFile?.mkdirs()
         file.writeText(story.toScwJson().toString(2))
+    }
+
+    private fun writeStoryToUri(context: Context, uri: Uri, story: StoryData) {
+        val bytes = story.toExternalScwJson().toString(2).toByteArray(Charsets.UTF_8)
+        context.contentResolver.openOutputStream(uri, "wt")?.use { outputStream ->
+            outputStream.write(bytes)
+            outputStream.flush()
+        } ?: error("Cannot write selected file")
     }
 
     private fun StoryData.cardsJson(): JSONArray {
